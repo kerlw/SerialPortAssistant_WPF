@@ -610,8 +610,8 @@ namespace MotorController {
                 }
 
                 cmbAvailableComPorts.ItemsSource = _comList;    //资源路径
-                cmbAvailableComPorts.DisplayMemberPath = "com"; //显示路径
-                cmbAvailableComPorts.SelectedValuePath = "com"; //值路径
+                cmbAvailableComPorts.DisplayMemberPath = "Com"; //显示路径
+                cmbAvailableComPorts.SelectedValuePath = "Com"; //值路径
                 cmbAvailableComPorts.SelectedValue = _ports[0]; //默认选择第一个
             }
         }
