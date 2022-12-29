@@ -217,11 +217,11 @@ namespace MotorController {
                     //设置当前波特率
                     _comPort.BaudRate = Convert.ToInt32(cmbRateList.SelectedValue);
                     //设置当前校验位
-                    _comPort.Parity = (Parity)cmbParityCom.SelectedValue;
+                    _comPort.Parity = (Parity)Convert.ToInt32(cmbParityCom.SelectedValue);
                     //设置当前数据位
                     _comPort.DataBits = Convert.ToInt32(cmbDataBits.SelectedValue);
                     //设置当前停止位   
-                    _comPort.StopBits = (StopBits)cmbStopBits.SelectedValue;
+                    _comPort.StopBits = (StopBits)Convert.ToInt32(cmbStopBits.SelectedValue);
                     _comPort.DataReceived += ComReceiveHandler;
 
                     _comPort.Open(); //打开串口
