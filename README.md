@@ -14,6 +14,12 @@ Windows应用商店中的串口调试助手可以加载一些脚本来处理接�
 大致的原理是在串口接收到数据的时候，触发js脚本调用，将接收到的数据传递给js，同时注入一个ScriptManager
 对象到js层，使js层可以通过ScriptManager来进行一些任务调度（实现接收到某些指令的情况下触发自动定时回复）。
 
+
+![](./screenshots/001.png)
+
+脚本编辑界面直接使用了一个简单的第三方控件AvalonEdit，支持Js语法高亮
+![](./screenshots/002.png)
+
 ## 2. 在js脚本中注入了以下类型 ## 
 
 * MessageBox: 可以直接使用.Net中的MessageBox来弹出对话框进行提示
