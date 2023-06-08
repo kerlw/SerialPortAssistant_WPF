@@ -9,10 +9,13 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using MahApps.Metro.Controls;
 using Microsoft.ClearScript.V8;
+using Action = System.Action;
 
 namespace MotorController {
     class ScriptItem {
@@ -88,7 +91,7 @@ namespace MotorController {
         private void Window_loaded(object sender, RoutedEventArgs e) {
             listBoxScripts.ItemsSource = _scripts;
             cmbScirpts.ItemsSource = _scriptNames;
-            _scriptManager.DoSend += SendToSerial;
+            _scriptManager.DoSend += OnManagerSend;
 
             RefreshPortList();
             RefreshScriptsList();
@@ -191,14 +194,14 @@ namespace MotorController {
             _autoSendTick.Tick += AutoSend;             //定时发送中断
         }
 
-        private int SendToSerial(byte[] content) {
-            if (_comPort.IsOpen) {
-                _comPort.Write(content, 0, content.Length);
-                return content.Length;
-            }
-
-            return 0;
-        }
+        // private int SendToSerial(byte[] content) {
+        //     if (_comPort.IsOpen) {
+        //         _comPort.Write(content, 0, content.Length);
+        //         return content.Length;
+        //     }
+        //
+        //     return 0;
+        // }
 
         private async void Button_Open(object sender, RoutedEventArgs e) {
             if (cmbAvailableComPorts.SelectedValue == null) {
@@ -283,7 +286,7 @@ namespace MotorController {
                     _comPort.Close(); //关闭串口
                     _waitClose = false;
                     SetAfterClose(); //成功关闭串口或串口丢失后的设置
-                } catch {
+                } catch (Exception exp) {
                     //如果在未关闭串口前，串口就已丢失，这时关闭串口会出现异常
 
                     //判断当前串口状态，如果ComPort.IsOpen==false，说明串口已丢失
@@ -291,7 +294,7 @@ namespace MotorController {
                         SetComLose();
                     } else {
                         //未知原因，无法关闭串口
-                        MessageBox.Show("无法关闭串口，原因未知！", "提示");
+                        MessageBox.Show("无法关闭串口," + exp.Message, "提示");
                     }
                 }
             }
@@ -361,6 +364,17 @@ namespace MotorController {
                 sendBuffer = Encoding.GetEncoding(cmbSendUnicode.Text).GetBytes(sendData);
             }
 
+            DoSendBuffer(sendBuffer);
+        }
+
+        private int OnManagerSend(byte[] buffer) {
+            int sentCount = 0;
+            var invoke = Dispatcher.BeginInvoke(new Action(() => { sentCount = DoSendBuffer(buffer); }));
+            return sentCount;
+        }
+
+        private int DoSendBuffer(byte[] sendBuffer) {
+            int sentCounter = 0;
             //尝试发送数据
             try {
                 //如果发送字节数大于1000，则每1000字节发送一次
@@ -369,21 +383,47 @@ namespace MotorController {
                     _comPort.Write(sendBuffer, i * 1000, 1000);
                     //刷新发送字节数
                     sendCount.Text = (Convert.ToInt32(sendCount.Text) + 1000).ToString();
+                    sentCounter += 1000;
                 }
 
-                if (sendBuffer.Length % 1000 != 0) {
-                    _comPort.Write(sendBuffer, sendTimes * 1000, sendBuffer.Length % 1000); //发送字节小于1000Bytes或上面发送剩余的数据
-                    sendCount.Text = (Convert.ToInt32(sendCount.Text) + sendBuffer.Length % 1000).ToString(); //刷新发送字节数
+                var left = sendBuffer.Length % 1000;
+                if (left != 0) {
+                    _comPort.Write(sendBuffer, sendTimes * 1000, left);                   //发送字节小于1000Bytes或上面发送剩余的数据
+                    sendCount.Text = (Convert.ToInt32(sendCount.Text) + left).ToString(); //刷新发送字节数
+                    sentCounter += left;
                 }
-            } catch {
+
+                //加显到日志区
+                AppendToLogArea("» " + BitConverter.ToString(sendBuffer).Replace('-', ' ') + "\n", Colors.Gray);
+            } catch (Exception e) {
                 //如果ComPort.IsOpen == false，说明串口已丢失
                 if (_comPort.IsOpen == false) {
                     SetComLose(); //串口丢失后相关设置
                 } else {
-                    MessageBox.Show("无法发送数据，原因未知！", "提示");
+                    MessageBox.Show("无法发送数据，" + e.Message, "提示");
                 }
             }
             //sendScrol.ScrollToBottom();//发送数据区滚动到底部
+            return sentCounter;
+        }
+
+        private void AppendToLogArea(string log, Color? foreground = null, Color? background = null) {
+            lock (commTBox) {
+                while (commTBox.Document.Blocks.Count > 5000) {
+                    commTBox.Document.Blocks.Remove(commTBox.Document.Blocks.FirstBlock);
+                }
+                Run run = new Run(log);
+                if (foreground != null) {
+                    run.Foreground = new SolidColorBrush((Color)foreground);
+                }
+                if (background != null) {
+                    run.Background = new SolidColorBrush((Color)background);
+                }
+                var paragraph = new Paragraph();
+                paragraph.Inlines.Add(run);
+                commTBox.Document.Blocks.Add(paragraph);
+                commTBox.ScrollToEnd();
+            }
         }
 
         //接收数据 数据在接收中断里面处理
@@ -407,42 +447,7 @@ namespace MotorController {
                     _comPort.Read(recBuffer, 0, recBuffer.Length);     //读取数据
 
                     // 更改UI的操作回归到UI线程进行
-                    recTBox.Dispatcher.Invoke(
-                        delegate {
-                            //接收数据字节数
-                            recCount.Text = (Convert.ToInt32(recCount.Text) + recBuffer.Length).ToString();
-
-                            string recData = "";
-                            if (chbHexMode.IsChecked == false) { //接收模式为ASCII文本模式
-                                recData = Encoding.GetEncoding(cmbRecUnicode.Text).GetString(recBuffer);
-                            } else {
-                                StringBuilder recBuffer16 = new StringBuilder(); //定义16进制接收缓存
-                                foreach (var b in recBuffer) {
-                                    recBuffer16.AppendFormat("{0:X2} ", b);
-                                }
-
-                                recData = recBuffer16.ToString();
-                            }
-
-                            recTBox.Text += "« " + recData + "\n"; //加显到接收区
-                            recTBox.ScrollToEnd();
-
-                            // 执行脚本，由于访问了chbExtensionScript属于UI线程资源，故放入invoke中
-                            if (chbExtensionScript.IsChecked == true && !String.IsNullOrEmpty(_injectJs)) {
-                                //dynamic createJsByteArray = _scriptEngine.Evaluate(@"
-                                //    (function (length) {
-                                //        return new Uint8Array(length);
-                                //    }).valueOf()
-                                //");
-                                //var array = (ITypedArray<byte>)createJsByteArray(recBuffer.Length);
-                                //array.Write(recBuffer, 0, (ulong)recBuffer.Length, 0);
-                                //_scriptEngine.AddHostObject("SourceDataBuffer", array);
-
-                                _scriptEngine.AddHostObject("SourceDataBuffer", recBuffer);
-                                _scriptEngine.Script.main();
-                            }
-                        }
-                    );
+                    commTBox.Dispatcher.BeginInvoke(new Action<byte[]>(OnBytesReceived), recBuffer);
                 } finally {
                     //UI使用结束，用于关闭串口时判断，避免自动发送时拔掉串口，陷入死循环
                     _receiving = false;
@@ -450,6 +455,40 @@ namespace MotorController {
             } else {
                 //暂停接收, 清接收缓存
                 _comPort.DiscardInBuffer();
+            }
+        }
+
+        void OnBytesReceived(byte[] recBuffer) {
+            //接收数据字节数
+            recCount.Text = (Convert.ToInt32(recCount.Text) + recBuffer.Length).ToString();
+
+            string recData = "";
+            if (chbHexMode.IsChecked == false) { //接收模式为ASCII文本模式
+                recData = Encoding.GetEncoding(cmbRecUnicode.Text).GetString(recBuffer);
+            } else {
+                StringBuilder recBuffer16 = new StringBuilder(); //定义16进制接收缓存
+                foreach (var b in recBuffer) {
+                    recBuffer16.AppendFormat("{0:X2} ", b);
+                }
+
+                recData = recBuffer16.ToString();
+            }
+
+            AppendToLogArea("« " + recData + "\n", Colors.Blue);
+
+            // 执行脚本，由于访问了chbExtensionScript属于UI线程资源，故放入invoke中
+            if (chbExtensionScript.IsChecked == true && !String.IsNullOrEmpty(_injectJs)) {
+                //dynamic createJsByteArray = _scriptEngine.Evaluate(@"
+                //    (function (length) {
+                //        return new Uint8Array(length);
+                //    }).valueOf()
+                //");
+                //var array = (ITypedArray<byte>)createJsByteArray(recBuffer.Length);
+                //array.Write(recBuffer, 0, (ulong)recBuffer.Length, 0);
+                //_scriptEngine.AddHostObject("SourceDataBuffer", array);
+
+                _scriptEngine.AddHostObject("SourceDataBuffer", recBuffer);
+                _scriptEngine.Script.main();
             }
         }
 
@@ -489,7 +528,10 @@ namespace MotorController {
         }
 
         private void RecClearBtn_Click(object sender, RoutedEventArgs e) {
-            recTBox.Text = "";
+            lock (commTBox) {
+                commTBox.Document.Blocks.Clear();
+            }
+            
         }
 
         private void CountClear_Click(object sender, RoutedEventArgs e) {
@@ -522,7 +564,7 @@ namespace MotorController {
         }
 
         //发送周期文本控件-失去事件
-        private void Time_LostFocus(object sender, RoutedEventArgs e) {
+        private void Time_LostFocus(object sender, RoutedEventArgs e) { 
             //时间为空或时间等于0，设置为1000
             if (Time.Text.Length == 0 || Convert.ToInt32(Time.Text) == 0) {
                 Time.Text = "1000";

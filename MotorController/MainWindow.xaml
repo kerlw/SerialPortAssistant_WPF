@@ -113,7 +113,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Row="2"
                                             Orientation="Vertical">
-                                    <Label Content="接收区设置"
+                                    <Label Content="接收日志设置"
                                            FontSize="15"
                                            Foreground="#00B2EE">
                                     </Label>
@@ -138,7 +138,7 @@
                                                 Click="StopRecBtn_Click">
                                         </Button>
                                         <Button x:Name="recClearBtn"
-                                                Content="清空接收区"
+                                                Content="清空日志"
                                                 Width="65"
                                                 Margin="0,0,10,0"
                                                 Click="RecClearBtn_Click" />
@@ -192,13 +192,17 @@
                         <RowDefinition Height="30"></RowDefinition>
                     </Grid.RowDefinitions>
                     <GroupBox Grid.Row="0"
-                              Header=" 接收区">
-                        <TextBox x:Name="recTBox"
-                                 IsReadOnly="True"
-                                 TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto"
-                                 BorderBrush="White">
-                        </TextBox>
+                              Header=" 通讯日志">
+                        <RichTextBox x:Name="commTBox"
+                                     IsReadOnly="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     BorderBrush="White">
+                            <RichTextBox.Document>
+                                <FlowDocument Focusable="True"
+                                              LineHeight="1.5">
+                                </FlowDocument>
+                            </RichTextBox.Document>
+                        </RichTextBox>
                     </GroupBox>
                     <GroupBox Grid.Row="2"
                               Header=" 发送区">

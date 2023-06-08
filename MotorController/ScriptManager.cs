@@ -136,7 +136,10 @@ namespace MotorController {
         /// 结束所有的任务
         /// </summary>
         public void StopAllTasks() {
-            _timer = null;
+            if (_timer != null) {
+                _timer.Stop();
+                _timer = null;
+            }
             _tasks.Clear();
         }
 
